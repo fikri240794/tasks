@@ -1,5 +1,5 @@
 # Tasks
-Limit your asynchronous goroutine processes in simple way. Inspired from [golang.org/x/sync/errgroup][].
+Limit your asynchronous goroutine processes in simple way. Inspired from https://pkg.go.dev/golang.org/x/sync/errgroup.
 
 ## Installation
 ```bash
@@ -43,9 +43,7 @@ Example how to use ErrorTask:
 ```go
 package main
 
-import (
-	"github.com/fikri240794/tasks"
-)
+import "github.com/fikri240794/tasks"
 
 func main() {
 	var (
