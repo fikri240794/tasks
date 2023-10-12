@@ -2,96 +2,110 @@ package tasks
 
 import (
 	"errors"
-	"fmt"
-	"math"
-	"math/rand"
+	"runtime"
 	"sync"
 	"testing"
-	"time"
 )
 
-func TestErrorTask_Error(t *testing.T) {
-	var (
-		maxConcurrentTask int
-		errTask           ErrorTask
-		taskLen           int
-		err               error
-	)
-
-	rand.Seed(time.Now().UnixNano())
-	maxConcurrentTask = rand.Intn(math.MaxInt8-2) + 2
-	taskLen = rand.Intn(math.MaxInt8-2) + 2
-	errTask = NewErrorTask(maxConcurrentTask)
-
-	for i := 0; i < taskLen; i++ {
-		errTask.Go(func() error {
-			var someRandInt int = rand.Intn(math.MaxInt8-2) + 2
-			var someRandInt2 int = someRandInt
-
-			if someRandInt%1 == 0 && someRandInt%someRandInt2 == 0 {
-				return errors.New("some error")
-			}
-
-			return nil
-		})
-	}
-
-	err = errTask.Wait()
-
-	if err == nil {
-		t.Fatal("Expected error: some error, Got: nil")
-	}
-}
-
 func TestErrorTask_Concurrent(t *testing.T) {
-	var (
-		maxConcurrentTask int
-		errTask           ErrorTask
-		taskLen           int
-		taskCount         int
-		taskActive        int
-		syncMutex         sync.Mutex
-		err               error
-	)
+	testCases := []struct {
+		Name              string
+		MaxConcurrentTask int
+		TaskLen           int
+		ExpectationErr    error
+	}{
+		{
+			Name:              "max concurrent task parameter is 0",
+			MaxConcurrentTask: 0,
+			TaskLen:           8,
+			ExpectationErr:    nil,
+		},
+		{
+			Name:              "max concurrent task parameter is 1",
+			MaxConcurrentTask: 1,
+			TaskLen:           16,
+			ExpectationErr:    nil,
+		},
+		{
+			Name:              "max concurrent task parameter greater than 1",
+			MaxConcurrentTask: 2,
+			TaskLen:           32,
+			ExpectationErr:    nil,
+		},
+		{
+			Name:              "max concurrent task parameter greater than 1 with error",
+			MaxConcurrentTask: 2,
+			TaskLen:           32,
+			ExpectationErr:    errors.New("some error"),
+		},
+	}
 
-	rand.Seed(time.Now().UnixNano())
-	maxConcurrentTask = rand.Intn(math.MaxInt8-2) + 2
-	taskLen = rand.Intn(math.MaxInt8-2) + 2
-	errTask = NewErrorTask(maxConcurrentTask)
+	for i := 0; i < len(testCases); i++ {
+		t.Run(testCases[i].Name, func(t *testing.T) {
+			var (
+				actualErrorTask           ErrorTask
+				actualErr                 error
+				expectedMaxConcurrentTask int
+				actualActiveTaskCount     int
+				actualTaskCount           int
+				syncMutex                 sync.Mutex
+			)
 
-	t.Logf("maximum concurrent task: %d", maxConcurrentTask)
-	t.Logf("task length: %d", taskLen)
+			expectedMaxConcurrentTask = testCases[i].MaxConcurrentTask
+			actualErrorTask = NewErrorTask(expectedMaxConcurrentTask)
 
-	for i := 0; i < taskLen; i++ {
-		errTask.Go(func() error {
-			defer func() {
-				syncMutex.Lock()
-				taskActive--
-				syncMutex.Unlock()
-			}()
-
-			syncMutex.Lock()
-			taskCount++
-			syncMutex.Unlock()
-
-			syncMutex.Lock()
-			taskActive++
-			syncMutex.Unlock()
-			if taskActive > maxConcurrentTask {
-				return fmt.Errorf("Expected maximum task active: %d, Got: %d", maxConcurrentTask, taskActive)
+			if expectedMaxConcurrentTask < 1 {
+				expectedMaxConcurrentTask = runtime.NumCPU()
 			}
 
-			return nil
+			for j := 0; j < testCases[i].TaskLen; j++ {
+				actualErrorTask.Go(func() error {
+					defer func() {
+						syncMutex.Lock()
+						actualActiveTaskCount--
+						syncMutex.Unlock()
+					}()
+
+					syncMutex.Lock()
+					actualTaskCount++
+					syncMutex.Unlock()
+
+					syncMutex.Lock()
+					actualActiveTaskCount++
+					syncMutex.Unlock()
+					if expectedMaxConcurrentTask < actualActiveTaskCount {
+						t.Errorf("expected maximum task active: %d, got: %d", expectedMaxConcurrentTask, actualActiveTaskCount)
+					}
+
+					if testCases[i].ExpectationErr != nil {
+						return testCases[i].ExpectationErr
+					}
+
+					return nil
+				})
+			}
+
+			actualErr = actualErrorTask.Wait()
+
+			if testCases[i].ExpectationErr == nil && actualErr != nil {
+				t.Errorf("expected error is nil, got: %s", actualErr.Error())
+			}
+
+			if testCases[i].ExpectationErr != nil && actualErr == nil {
+				t.Errorf("expected error is %s, got: nil", testCases[i].ExpectationErr.Error())
+			}
+
+			if testCases[i].ExpectationErr != nil && actualErr != nil && testCases[i].ExpectationErr.Error() != actualErr.Error() {
+				t.Errorf("expected error is %s, got: %s", testCases[i].ExpectationErr.Error(), actualErr.Error())
+			}
+
+			if testCases[i].TaskLen != actualTaskCount && testCases[i].ExpectationErr == nil {
+				t.Errorf("expected task count: %d, got: %d", testCases[i].TaskLen, actualTaskCount)
+			}
+
+			if actualTaskCount != 1 && testCases[i].ExpectationErr != nil {
+				t.Errorf("expected task count: %d, got: %d", 1, actualTaskCount)
+			}
 		})
-	}
-
-	err = errTask.Wait()
-
-	if err != nil {
-		t.Fatalf("Expected error: nil, Got: %s", err.Error())
-	}
-
-	if taskCount != taskLen {
-		t.Errorf("Expected task count: %d, Got: %d", taskLen, taskCount)
 	}
 }
