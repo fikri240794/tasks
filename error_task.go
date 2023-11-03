@@ -40,12 +40,14 @@ func (et *errorTask) Go(task func() error) {
 
 		et.c <- struct{}{}
 
-		if len(et.errsChan) == 0 {
-			errRoutine = taskToDo()
+		if len(et.errsChan) > 0 {
+			return
+		}
 
-			if errRoutine != nil {
-				et.errsChan <- errRoutine
-			}
+		errRoutine = taskToDo()
+
+		if errRoutine != nil {
+			et.errsChan <- errRoutine
 		}
 	}(task)
 }
