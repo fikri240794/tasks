@@ -26,15 +26,15 @@ func NewTask(maxConcurrentTask int) Task {
 }
 
 func (t *task) Go(task func()) {
+	t.c <- struct{}{}
 	t.wg.Add(1)
 
 	go func(taskToDo func()) {
 		defer func() {
-			t.wg.Done()
 			<-t.c
+			t.wg.Done()
 		}()
 
-		t.c <- struct{}{}
 		taskToDo()
 	}(task)
 }

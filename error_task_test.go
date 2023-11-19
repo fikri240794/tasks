@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"context"
 	"errors"
 	"runtime"
 	"sync"
@@ -52,7 +53,7 @@ func TestErrorTask_Concurrent(t *testing.T) {
 			)
 
 			expectedMaxConcurrentTask = testCases[i].MaxConcurrentTask
-			actualErrorTask = NewErrorTask(expectedMaxConcurrentTask)
+			actualErrorTask, _ = NewErrorTask(expectedMaxConcurrentTask, context.Background())
 
 			if expectedMaxConcurrentTask < 1 {
 				expectedMaxConcurrentTask = runtime.NumCPU()

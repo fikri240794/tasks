@@ -43,20 +43,28 @@ Example how to use ErrorTask:
 ```go
 package main
 
-import "github.com/fikri240794/tasks"
+import (
+	"context"
+
+	"github.com/fikri240794/tasks"
+)
 
 func main() {
 	var (
+		ctx               context.Context
 		maxConcurrentTask int
 		errTask           tasks.ErrorTask
+		errTaskCtx        context.Context
 		err               error
 	)
 
-	maxConcurrentTask = 2 // set limit your async gorotine processes
-	errTask = tasks.NewErrorTask(maxConcurrentTask)
+	ctx = context.Background() // any context from (from param, request, etc...)
+	maxConcurrentTask = 2      // set limit your async gorotine processes
+	errTask, errTaskCtx = tasks.NewErrorTask(maxConcurrentTask, ctx) // always create new context for errTask
 
 	errTask.Go(func() error {
 		// task 1
+		someFunc(errTaskCtx, args...) // use errTaskCtx context for all errTask goroutine
 	})
 	errTask.Go(func() error {
 		// task 2
@@ -73,5 +81,4 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
 ```
